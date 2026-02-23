@@ -829,3 +829,160 @@ def estimate_memory_bytes(
     # TODO: Implement memory estimation
     
     raise NotImplementedError("Implement estimate_memory_bytes")
+
+
+if __name__ == "__main__":
+    # Minimal dimensions for fast debugging
+    torch.manual_seed(42)
+    d_model, d_ff = 8, 16
+    n_heads, seq_len = 2, 4
+    vocab_size = 32
+
+    print("=" * 60)
+    print("Minimal input tests for debugging (run one at a time)")
+    print("=" * 60)
+
+    # --- Linear ---
+    # x: (batch, seq, d_in) -> (batch, seq, d_out)
+    try:
+        linear = Linear(d_in=d_model, d_out=d_ff)
+        x = torch.randn(1, seq_len, d_model)
+        out = linear(x)
+        print(f"Linear: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"Linear: {e}")
+
+    # --- Embedding ---
+    # token_ids: (batch, seq) -> (batch, seq, d_model)
+    try:
+        emb = Embedding(vocab_size, d_model)
+        ids = torch.randint(0, vocab_size, (1, seq_len))
+        out = emb(ids)
+        print(f"Embedding: ids {ids.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"Embedding: {e}")
+
+    # --- RMSNorm ---
+    try:
+        rmsnorm = RMSNorm(d_model)
+        x = torch.randn(1, seq_len, d_model)
+        out = rmsnorm(x)
+        print(f"RMSNorm: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"RMSNorm: {e}")
+
+    # --- softmax ---
+    try:
+        x = torch.randn(2, 4)
+        out = softmax(x, dim=-1)
+        print(f"softmax: input {x.shape} -> output {out.shape}, sum={out.sum(dim=-1)}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"softmax: {e}")
+
+    # --- silu ---
+    try:
+        x = torch.randn(2, 4)
+        out = silu(x)
+        print(f"silu: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"silu: {e}")
+
+    # --- SwiGLU ---
+    try:
+        swiglu = SwiGLU(d_model, d_ff)
+        x = torch.randn(1, seq_len, d_model)
+        out = swiglu(x)
+        print(f"SwiGLU: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"SwiGLU: {e}")
+
+    # --- RoPE (RotaryPositionEmbedding) ---
+    try:
+        rope = RotaryPositionEmbedding(d_model // n_heads, max_seq_len=seq_len, theta=10000.0)
+        x = torch.randn(1, n_heads, seq_len, d_model // n_heads)
+        pos = torch.arange(seq_len).unsqueeze(0)
+        out = rope(x, pos)
+        print(f"RoPE: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, NameError) as e:
+        print(f"RoPE: {e}")
+
+    # --- scaled_dot_product_attention ---
+    try:
+        q = torch.randn(1, n_heads, seq_len, d_model // n_heads)
+        k = torch.randn(1, n_heads, seq_len, d_model // n_heads)
+        v = torch.randn(1, n_heads, seq_len, d_model // n_heads)
+        mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool))
+        out = scaled_dot_product_attention(q, k, v, mask)
+        print(f"SDPA: Q,K,V {q.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"SDPA: {e}")
+
+    # --- MultiHeadSelfAttention ---
+    try:
+        attn = MultiHeadSelfAttention(d_model, n_heads)
+        x = torch.randn(1, seq_len, d_model)
+        out = attn(x)
+        print(f"MultiHeadSelfAttention: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"MultiHeadSelfAttention: {e}")
+
+    # --- MultiHeadSelfAttentionWithRoPE ---
+    try:
+        attn_rope = MultiHeadSelfAttentionWithRoPE(d_model, n_heads, seq_len, theta=10000.0)
+        x = torch.randn(1, seq_len, d_model)
+        out = attn_rope(x)
+        print(f"MultiHeadSelfAttentionWithRoPE: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, NameError) as e:
+        print(f"MultiHeadSelfAttentionWithRoPE: {e}")
+
+    # --- TransformerBlock ---
+    try:
+        block = TransformerBlock(d_model, n_heads, d_ff, seq_len, theta=10000.0)
+        x = torch.randn(1, seq_len, d_model)
+        out = block(x)
+        print(f"TransformerBlock: input {x.shape} -> output {out.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"TransformerBlock: {e}")
+
+    # --- TransformerLM ---
+    try:
+        # Note: requires Embedding, TransformerBlock to work
+        model = TransformerLM(
+            vocab_size=vocab_size,
+            context_length=seq_len,
+            d_model=d_model,
+            num_layers=1,
+            num_heads=n_heads,
+            d_ff=d_ff,
+        )
+        ids = torch.randint(0, vocab_size, (1, seq_len))
+        logits = model(ids)
+        print(f"TransformerLM: ids {ids.shape} -> logits {logits.shape}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"TransformerLM: {e}")
+
+    # --- count_parameters ---
+    try:
+        model = TransformerLM(vocab_size=32, context_length=8, d_model=8, num_layers=1, num_heads=2, d_ff=16)
+        n = count_parameters(model)
+        print(f"count_parameters: {n}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"count_parameters (needs complete model): {e}")
+
+    # --- count_flops_per_token ---
+    try:
+        flops = count_flops_per_token(
+            vocab_size=32, context_length=8, d_model=8, num_layers=1, num_heads=2, d_ff=16
+        )
+        print(f"count_flops_per_token: {flops}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"count_flops_per_token: {e}")
+
+    # --- estimate_memory_bytes ---
+    try:
+        mem = estimate_memory_bytes(vocab_size=32, d_model=8, num_layers=1, d_ff=16, dtype_bytes=4)
+        print(f"estimate_memory_bytes: {mem}")
+    except (NotImplementedError, AttributeError, NameError) as e:
+        print(f"estimate_memory_bytes: {e}")
+
+    print("=" * 60)

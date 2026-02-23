@@ -81,10 +81,41 @@ class Tokenizer:
         if len(tokens) <= 1:
             return tokens
         
-        # TODO: Implement BPE algorithm
-        # Return tokens
-        
-        raise NotImplementedError("Implement _bpe")
+        def merge_all_occurrences(seq: list[bytes], pair: tuple[bytes, bytes]) -> list[bytes]:
+            """Merge all non-overlapping occurrences of pair, left-to-right."""
+            a, b = pair
+            out: list[bytes] = []
+            i = 0
+            while i < len(seq):
+                if i < len(seq) - 1 and seq[i] == a and seq[i + 1] == b:
+                    out.append(a + b)
+                    i += 2
+                else:
+                    out.append(seq[i])
+                    i += 1
+            return out
+
+        while True:
+            best_pair: tuple[bytes, bytes] | None = None
+            best_rank = float("inf")
+
+            # Among all adjacent pairs, pick the one whose merged token exists in the
+            # vocab and has the lowest token ID (rank).
+            for a, b in self._get_pairs(tokens):
+                merged = a + b
+                rank = self.inverse_vocab.get(merged)
+                if rank is None:
+                    continue
+                if rank < best_rank:
+                    best_rank = rank
+                    best_pair = (a, b)
+
+            if best_pair is None:
+                break
+
+            tokens = merge_all_occurrences(tokens, best_pair)
+
+        return tokens
 
     def _split_with_special_tokens(self, text: str) -> list[tuple[str, bool]]:
         """
@@ -139,9 +170,19 @@ class Tokenizer:
             return []
         
         ids = []
-        # TODO: Implement encoding
-        
-        raise NotImplementedError("Implement _encode_chunk")
+        for token in self.pat.findall(text):
+            pieces = self._bpe(token.encode("utf-8"))
+            for piece in pieces:
+                token_id = self.inverse_vocab.get(piece)
+                if token_id is not None:
+                    ids.append(token_id)
+                    continue
+
+                # Fallback: emit individual bytes (should always exist for GPT-2 vocab)
+                for b in piece:
+                    ids.append(self.inverse_vocab[bytes([b])])
+
+        return ids
 
     def encode(self, text: str) -> list[int]:
         """
@@ -188,10 +229,9 @@ class Tokenizer:
         """
         if not ids:
             return ""
-        
-        # TODO: Implement decoding
-        
-        raise NotImplementedError("Implement decode")
+
+        data = b"".join(self.vocab[token_id] for token_id in ids)
+        return data.decode("utf-8", errors="replace")
 
     def encode_iterable(self, iterable: Iterator[str]) -> Iterator[int]:
         """
@@ -289,3 +329,18 @@ def get_tokenizer(
         Tokenizer instance
     """
     return Tokenizer(vocab, merges, special_tokens)
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.append("/home/yuejian/project/cs288-sp26-a2/part1")
+    from train_bpe import train_bpe
+    from pathlib import Path
+    vocab, merges = train_bpe(
+        input_path=Path("/home/yuejian/project/cs288-sp26-a2/part1/fixtures/tinystories_sample_5M.txt"),
+        vocab_size=10000,
+        special_tokens=["<|endoftext|>"],
+    )
+    tokenizer = get_tokenizer(vocab, merges, special_tokens=["<|endoftext|>"])
+    tokens = tokenizer.encode("Once upon a time, there was a little girl.")
+    print(tokens)

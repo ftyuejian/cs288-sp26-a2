@@ -118,7 +118,7 @@ def train_bpe(
          }
        
        So the initial vocab size = len(special_tokens) + 256
-    
+
     2. WORD FREQUENCY COUNTING
        - Pre-tokenize the corpus using pre_tokenize(text, special_tokens)
        - For each pre-token, convert to bytes and represent as tuple of single bytes
@@ -194,5 +194,75 @@ def train_bpe(
             forbidden_substrings.add(special_bytes[:i])
     
     # TODO: Implement BPE training
+
+    # vacabulary initialization
+    vocab = {}
+    for i in range(len(special_tokens)):
+        vocab[i] = special_tokens[i].encode("utf-8")
     
-    raise NotImplementedError("Implement train_bpe")
+    for i in range(256):
+        vocab[i + len(special_tokens)] = bytes([i])
+
+    # word frequency counting
+    word_freqs = Counter()
+    for word in pre_tokenize(text, special_tokens):
+        word_bytes = word.encode("utf-8")
+        # skip words containing forbidden substring (prefix of special token)
+        if any(word_bytes[i : i + len(fb)] == fb for fb in forbidden_substrings for i in range(len(word_bytes) - len(fb) + 1)):
+            continue
+        word_freqs[tuple(word_bytes[i : i + 1] for i in range(len(word_bytes)))] += 1
+
+    # pair frequency counting
+    pair_freqs = Counter()
+    for word, freq in word_freqs.items():
+        pairs = get_pairs(word)
+        for pair in pairs:
+            pair_freqs[pair] += freq
+
+    # merge loop:
+    merges = []
+    while len(vocab) < vocab_size:
+        if not pair_freqs:
+            break
+        # select best pair (lexicographically largest on tie, per reference)
+        best_pair = max(pair_freqs, key=lambda p: (pair_freqs[p], p))
+
+        # create merged token
+        new_token = best_pair[0] + best_pair[1]
+        vocab[len(vocab)] = new_token
+        merges.append(best_pair)
+
+        # collect words that contain best_pair (as adjacent elements)
+        words_to_merge = [
+            w for w in word_freqs
+            if any(w[i : i + 2] == (best_pair[0], best_pair[1]) for i in range(len(w) - 1))
+        ]
+
+        # update word representations and pair counts
+        for word in words_to_merge:
+            freq = word_freqs[word]
+            new_word = merge_word(word, best_pair)
+            
+            # subtract old pairs
+            for pair in get_pairs(word):
+                pair_freqs[pair] -= freq
+                if pair_freqs[pair] <= 0:
+                    del pair_freqs[pair]
+            # add new pairs
+            for pair in get_pairs(new_word):
+                pair_freqs[pair] += freq
+            
+            # update word frequency
+            word_freqs[new_word] = word_freqs.get(new_word, 0) + freq
+            del word_freqs[word]  
+    return vocab, merges
+
+
+if __name__ == "__main__":
+    vocab, merges = train_bpe(
+        input_path=Path("/home/yuejian/project/cs288-sp26-a2/part1/fixtures/tinystories_sample_5M.txt"),
+        vocab_size=400,
+        special_tokens=["<|endoftext|>"],
+    )
+    print(vocab)
+    print(merges)
