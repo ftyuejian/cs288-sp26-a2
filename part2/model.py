@@ -50,9 +50,7 @@ class Linear(nn.Module):
         Returns:
             Output tensor of shape (..., d_out)
         """
-        # TODO: Implement linear transformation
-        
-        raise NotImplementedError("Implement Linear.forward")
+        return x @ self.weight.T
 
 
 # =============================================================================
@@ -77,6 +75,9 @@ class Embedding(nn.Module):
         self.d_model = d_model
         # Embedding weight matrix of shape (vocab_size, d_model)
         # TODO: Implement embedding
+        self.weight = nn.Parameter(
+            torch.empty(self.vocab_size, self.d_model)
+        )
         self._init_weights()
     
     def _init_weights(self):
@@ -94,8 +95,8 @@ class Embedding(nn.Module):
             Tensor of embeddings of shape (batch, seq_len, d_model)
         """
         # TODO: Implement embedding lookup
-        
-        raise NotImplementedError("Implement Embedding.forward")
+        return self.weight[token_ids]
+
 
 
 # =============================================================================
@@ -141,8 +142,10 @@ class RMSNorm(nn.Module):
             Normalized tensor of same shape
         """
         # TODO: Implement RMS normalization
-        
-        raise NotImplementedError("Implement RMSNorm.forward")
+        rms = torch.sqrt(torch.mean(x**2,dim = -1,keepdim = True)+self.eps)
+        x_norm = x/rms
+        return x_norm * self.weight
+
 
 
 # =============================================================================
@@ -161,8 +164,11 @@ def softmax(x: Tensor, dim: int = -1) -> Tensor:
         Tensor of same shape as input with softmax applied along dim
     """
     # TODO: Implement numerically stable softmax
-    
-    raise NotImplementedError("Implement softmax")
+    z = torch.exp(x)
+    sum_z = torch.sum(z,dim = dim, keepdim = True)
+
+    return z/sum_z
+
 
 # =============================================================================
 # SiLU activation (helper for SwiGLU)
@@ -180,8 +186,8 @@ def silu(x: Tensor) -> Tensor:
         Tensor with SiLU applied element-wise
     """
     # TODO: Implement SiLU activation
-    
-    raise NotImplementedError("Implement silu")
+    return x * torch.sigmoid(x)
+
 
 
 # =============================================================================
@@ -226,8 +232,9 @@ class SwiGLU(nn.Module):
             Output tensor of shape (..., d_model)
         """
         # TODO: Implement SwiGLU
-        
-        raise NotImplementedError("Implement SwiGLU.forward")
+        gate = torch.nn.functional.silu(self.w1(x))   # (..., d_ff)
+        up   = self.w3(x)                             # (..., d_ff)
+        return self.w2(gate * up)
 
 
 # =============================================================================
