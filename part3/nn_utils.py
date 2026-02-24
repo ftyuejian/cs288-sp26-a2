@@ -17,10 +17,9 @@ def softmax(x: Tensor, dim: int = -1) -> Tensor:
     Returns:
         Tensor of same shape as input with softmax applied along dim
     """
-    # TODO: Implement numerically stable softmax. You can re-use the same one 
-    # used in part 2. But for this problem, you need to implement a numerically stable version to pass harder tests.
-    
-    raise NotImplementedError("Implement softmax")
+    x_max = torch.amax(x, dim=dim, keepdim=True)
+    z = torch.exp(x - x_max)
+    return z / torch.sum(z, dim=dim, keepdim=True)
 
 
 def cross_entropy(logits: Tensor, targets: Tensor) -> Tensor:
@@ -35,9 +34,12 @@ def cross_entropy(logits: Tensor, targets: Tensor) -> Tensor:
     Returns:
         Scalar tensor containing the mean cross-entropy loss
     """
-    # TODO: Implement cross-entropy loss
-    
-    raise NotImplementedError("Implement cross_entropy")
+    max_logits = torch.amax(logits, dim=-1, keepdim=True)
+    stabilized = logits - max_logits
+    logsumexp = torch.log(torch.sum(torch.exp(stabilized), dim=-1)) + max_logits.squeeze(-1)
+    target_logits = logits.gather(dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
+    loss = logsumexp - target_logits
+    return loss.mean()
 
 
 def gradient_clipping(parameters, max_norm: float) -> Tensor:
@@ -51,9 +53,28 @@ def gradient_clipping(parameters, max_norm: float) -> Tensor:
     Returns:
         The total norm of the gradients before clipping
     """
-    # TODO: Implement gradient clipping
-    
-    raise NotImplementedError("Implement gradient_clipping")
+    grads = []
+    for p in parameters:
+        if getattr(p, "grad", None) is None:
+            continue
+        grads.append(p.grad)
+
+    if not grads:
+        return torch.tensor(0.0)
+
+    device = grads[0].device
+    total_norm_sq = torch.zeros((), device=device, dtype=torch.float32)
+    for g in grads:
+        total_norm_sq = total_norm_sq + g.detach().float().pow(2).sum()
+    total_norm = torch.sqrt(total_norm_sq)
+
+    if max_norm > 0:
+        clip_coef = max_norm / (total_norm + 1e-6)
+        clip_coef_clamped = torch.clamp(clip_coef, max=1.0)
+        for g in grads:
+            g.mul_(clip_coef_clamped)
+
+    return total_norm
 
 
 def token_accuracy(logits: Tensor, targets: Tensor, ignore_index: int = -100) -> Tensor:
@@ -83,9 +104,12 @@ def token_accuracy(logits: Tensor, targets: Tensor, ignore_index: int = -100) ->
         >>> token_accuracy(logits, targets)
         tensor(0.6667)  # 2 out of 3 correct
     """
-    # TODO: Implement token accuracy
-    
-    raise NotImplementedError("Implement token_accuracy")
+    preds = torch.argmax(logits, dim=-1)
+    valid = targets != ignore_index
+    if not torch.any(valid):
+        return torch.tensor(0.0, device=logits.device)
+    correct = (preds == targets) & valid
+    return correct.float().sum() / valid.sum()
 
 
 def perplexity(logits: Tensor, targets: Tensor, ignore_index: int = -100) -> Tensor:
@@ -118,6 +142,8 @@ def perplexity(logits: Tensor, targets: Tensor, ignore_index: int = -100) -> Ten
         >>> perplexity(logits, targets)
         tensor(3.)  # Equal to vocab_size (worst case for uniform)
     """
-    # TODO: Implement perplexity
-    
-    raise NotImplementedError("Implement perplexity")
+    valid = targets != ignore_index
+    if not torch.any(valid):
+        return torch.tensor(1.0, device=logits.device)
+    ce = cross_entropy(logits[valid], targets[valid])
+    return torch.exp(ce)
